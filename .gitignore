@@ -1,0 +1,6 @@
+# Python 
+.venv/
+src/__pycache__/
+
+# Other 
+resources/
