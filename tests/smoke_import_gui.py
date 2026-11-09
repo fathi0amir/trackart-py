@@ -9,8 +9,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import matplotlib
 matplotlib.use("TkAgg")
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "TestData",
-                        "SLB-on-mica_DOPC-SpM-ATTO677N", "25C")
+DATA_DIR = os.environ.get(
+    "TRACKART_TEST_DATA",
+    os.path.join(os.path.dirname(__file__), "..", "..", "TestData",
+                 "SLB-on-mica_DOPC-SpM-ATTO677N", "25C"))
 
 
 def main():

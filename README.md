@@ -4,11 +4,11 @@ A from-scratch **Python port of TrackArt v2.6.3** — a MATLAB application for
 **single particle tracking (SPT) data analysis and simulation** — built on
 `numpy` / `scipy` / `matplotlib` with a **tkinter** GUI.
 
-The port keeps the original's five-module workflow, the same data layouts and
-the same numerical methods (Michalet 2010 MSD error analysis, Qian 1991 D
-errors, multi-exponential CPD fitting, permutation-based error estimation),
-so results are directly comparable with the original software and with the
-original `documentation.pdf`.
+The port keeps the original's five-module workflow and data layouts, including
+Michalet 2010 MSD error analysis, Qian 1991 D errors, multi-exponential CPD
+fitting and permutation-based error estimation. It is intended for comparison
+with the original software and its `documentation.pdf`; numerical results may
+differ because of solver differences and the corrections described below.
 https://sourceforge.net/projects/trackart/
 
 ## Requirements
@@ -90,7 +90,7 @@ For each time lag, the CPD of squared displacements is calculated (with
 ```
 
 Initial guesses (and optional *fixed* parameters) for `D`, `F` and the
-`intercept` are set in the panel. The 3p fit constrains `D1 ≤ D2 ≤ D3` and
+`intercept` are set in the panel. The 3p fit constrains `D1 ≥ D2 ≥ D3` and
 `ΣFᵢ = 1`. A residuals panel and a preview of per-population MSDs and
 fractions help select the right model; an F-test between models is printed
 to the console. `Export CPD` / `Export fit` save the binned CPD / fitted
@@ -107,8 +107,9 @@ into the CPD guess fields.
 
 ## Test data
 
-The `TestData/` folder contains real DOPC/SM single-molecule data
-(Mosaic Particle Tracker `.xls` output). In the Import tab select several
+The original TrackArt distribution includes a `TestData/` folder with real
+DOPC/SM single-molecule data (Mosaic Particle Tracker `.xls` output); this data
+is not included in this Python repository. In the Import tab select several
 files, set `Exposure 10 ms`, `Px size 0.16 um`, `Lags to use 5`, hit
 *Calculate*, then experiment with the exclusion criteria (the manual's
 worked example uses `Min frames 30`, `Min D 0.05`, `Max D 15`,
@@ -121,28 +122,57 @@ cd trackart-py
 uv run python tests/test_numerics.py   # simulation + MSD + CPD/FIT recovery
 uv run python tests/test_3pop.py       # 3-population CPD + FIT recovery
 uv run python tests/test_domains.py    # domains simulation
-uv run python tests/test_import.py     # import of the shipped TestData
-uv run python tests/smoke_gui.py       # builds the GUI, runs the full pipeline
+uv run python tests/test_regressions.py
+uv run python tests/smoke_gui.py
+uv run python tests/smoke_domains_gui.py
+uv run python tests/test_gui_regressions.py
 ```
+
+GUI tests require a display; on headless Linux prefix their commands with
+`xvfb-run -a`. To run the original-data import tests and the Octave-derived
+numerical parity regression, set `TRACKART_TEST_DATA` to the extracted
+`TestData/SLB-on-mica_DOPC-SpM-ATTO677N/25C` directory, then run
+`tests/test_import.py`, `tests/smoke_import_gui.py` and
+`tests/test_regressions.py`. The parity regression is skipped when the variable
+is unset.
 
 The numerical tests reproduce the tutorial results of the original manual
 (e.g. recovering D ≈ 2 / 0.2 µm²/s with fractions ≈ 50 % for the two-
 population example, and D ≈ 2 / 0.2 / 0.02 for the three-population one).
 
-## Notes on faithfulness
+## Numerical behavior and compatibility
 
-The port follows the original MATLAB code line by line. Known, deliberate
-differences:
+The top-bar **Legacy numerical behavior** checkbox is enabled by default.
+It preserves several behaviors of the original MATLAB code that can affect
+results. Uncheck it to use the following corrections:
+
+- CPD histogram bins use squared-displacement values directly rather than
+  squaring their centers again. This can materially change binned fits.
+- Switching rates remain in inverse seconds when microsteps are used, rather
+  than being multiplied by the number of microsteps.
+- For active diffusion with a forced intercept, the intercept is fixed
+  instead of the diffusion coefficient.
+- Confined diffusion reports the fitted `A2` instead of repeating `A1`.
+
+Changing the checkbox clears current analysis results; re-run the simulation
+as well if changing the microstep switching behavior. Edited exposure or step
+times apply after recalculating the import or running a new simulation.
+
+Other fixes apply in both modes, so legacy mode is not a guarantee of
+bit-for-bit MATLAB parity:
 
 - `calculateMSD` uses the corrected `K = Σ max(len − Δt, 0)` (the original
   could produce negative K for trajectories shorter than the lag).
 - The Domains-mode seeding/move loops have retry guards so a degenerate
   parameter set (e.g. `k21 = k12 = 0`) cannot freeze the GUI; the original
   would loop forever.
-- The CPD binning keeps the original's `(bin centre)²` convention, which the
-  exponential fit absorbs (results match the binned-on-r² variant to within
-  fit noise).
-- `nanstd`/`nanvar` use the sample (N−1) definition, as in MATLAB.
+- Three-population fits enforce their constraints and report solver failures;
+  permutation calculations use the selected subset's displacement counts.
+- Fraction standard deviations use the sample (N−1) definition, as in MATLAB.
+
+Import, squared displacements, ensemble MSD and linear D were compared against
+the original on a small real-data sample. The original MATLAB optimization
+toolbox was not available for a full CPD/FIT optimizer comparison.
 
 ## License
 

@@ -381,7 +381,7 @@ def msd_anomalousDiffusion(MSD, lags_to_fit, intercept):
     }
 
 
-def msd_confinedDiffusion(MSD, lags_to_fit, intercept):
+def msd_confinedDiffusion(MSD, lags_to_fit, intercept, legacy=True):
     """Confined / corralled diffusion fit."""
     MSD = np.asarray(MSD, dtype=float)
     if np.isscalar(lags_to_fit):
@@ -394,7 +394,7 @@ def msd_confinedDiffusion(MSD, lags_to_fit, intercept):
         intercept = [0, intercept[1]]
 
     p_guess = polyfit(x[:3], y[:3], 1) if len(x) >= 3 else polyfit(x, y, 1)
-    param0 = np.array([y[int(np.max(lags_to_fit)) - 1], 1.0, 1.0, p_guess[0], intercept[0]])
+    param0 = np.array([y[-1], 1.0, 1.0, p_guess[0], intercept[0]])
     lb = [0, 0, 0, 0, 0]
     ub = [np.inf] * 5
     fix = np.array([0, 0, 0, 0, int(intercept[1])], dtype=bool)
@@ -404,14 +404,14 @@ def msd_confinedDiffusion(MSD, lags_to_fit, intercept):
     return {
         "D": p[3],
         "A1": p[1],
-        "A2": p[1],
+        "A2": p[1] if legacy else p[2],
         "rc": p[0],
         "c": p[4],
         "fit": p,
     }
 
 
-def msd_activeDiffusion(MSD, lags_to_fit, intercept):
+def msd_activeDiffusion(MSD, lags_to_fit, intercept, legacy=True):
     """Active (flow) diffusion fit ``<r^2> = v^2 t^2 + 4D t + c``."""
     MSD = np.asarray(MSD, dtype=float)
     if np.isscalar(lags_to_fit):
@@ -427,7 +427,8 @@ def msd_activeDiffusion(MSD, lags_to_fit, intercept):
     param0 = np.array([0.0, p_guess[0], intercept[0]])
     lb = [0, 0, 0]
     ub = [np.inf] * 3
-    fix = np.array([0, int(intercept[1]), 0], dtype=bool)
+    fix = np.array([0, int(intercept[1]) if legacy else 0,
+                    0 if legacy else int(intercept[1])], dtype=bool)
 
     p = lsqcurvefit_fixed(msd_activeDiffusionModel, x, y, param0, fix, lb, ub)
 
@@ -549,7 +550,8 @@ def msd_calculateDcoeff(MSD, param):
         ]
 
     elif model == "confined":
-        results = msd_confinedDiffusion(MSD, lags_to_fit, intercept)
+        results = msd_confinedDiffusion(MSD, lags_to_fit, intercept,
+                                         legacy=param.get("legacy_models", True))
         results_table = [
             ("Diffusion coefficient [um^2/s]:", results["D"]),
             ("A1:", results["A1"]),
@@ -559,7 +561,8 @@ def msd_calculateDcoeff(MSD, param):
         ]
 
     elif model == "active":
-        results = msd_activeDiffusion(MSD, lags_to_fit, intercept)
+        results = msd_activeDiffusion(MSD, lags_to_fit, intercept,
+                                      legacy=param.get("legacy_models", True))
         results_table = [
             ("Diffusion coefficient [um^2/s]:", results["D"]),
             ("v:", np.sqrt(results["vsq"])),

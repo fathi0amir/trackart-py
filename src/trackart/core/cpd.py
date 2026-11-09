@@ -71,7 +71,7 @@ def cpd_fit_2p(x, y, i, Dguess):
 
 
 def cpd_fit_3p(x, y, i, Dguess):
-    """Fit the 3-population model with constraints (D1 <= D2 <= D3,
+    """Fit the 3-population model with constraints (D1 >= D2 >= D3,
     fractions sum to 1).  Mirrors the fmincon-based fit."""
     x0 = np.array([
         Dguess[0, 0] * i + Dguess[0, 2],
@@ -82,8 +82,20 @@ def cpd_fit_3p(x, y, i, Dguess):
         Dguess[5, 0],
     ])
     fix = np.array([Dguess[k, 1] == 1 for k in range(6)])
+    if np.any(x0[:3] < 0) or np.any((x0[3:] < 0) | (x0[3:] > 1)):
+        raise ValueError("CPD guesses must have nonnegative D and fractions in [0, 1]")
 
     free = ~fix
+    remaining = 1.0 - x0[3:][fix[3:]].sum()
+    n_free_fractions = np.count_nonzero(free[3:])
+    if remaining < -1e-12 or remaining > n_free_fractions + 1e-12:
+        raise ValueError("Fixed CPD fractions cannot sum to one")
+    if not n_free_fractions and abs(remaining) > 1e-12:
+        raise ValueError("Fixed CPD fractions must sum to one")
+    if not np.any(free):
+        if np.any(np.diff(x0[:3]) > 1e-12):
+            raise ValueError("Fixed diffusion coefficients must be in descending order")
+        return x0
     lb = np.zeros(np.sum(free))
     ub = np.concatenate([np.full(np.sum(free[:3]), np.inf),
                          np.ones(np.sum(free[3:]))])
@@ -91,8 +103,9 @@ def cpd_fit_3p(x, y, i, Dguess):
     A = -np.ones((1, np.sum(free)))
     b = np.array([0.0])
 
-    Aeq = np.zeros((1, np.sum(free)))
-    Aeq[0, np.where(free)[0] >= 3] = 1.0
+    Aeq = np.zeros((1, np.sum(free))) if n_free_fractions else None
+    if Aeq is not None:
+        Aeq[0, np.where(free)[0] >= 3] = 1.0
     tmp = x0.copy()
     tmp[~fix] = 0.0
     tmp[:3] = 0.0
@@ -102,15 +115,20 @@ def cpd_fit_3p(x, y, i, Dguess):
         xfull = x0_.copy()
         xfull[~fix_] = xx
         c = np.array([xfull[1] - xfull[0], xfull[2] - xfull[1]])
-        ceq = np.array([1 - xfull[3] - xfull[4] - xfull[5]])
-        return c, ceq
+        return c, np.array([])
 
-    # first refine the guess with an unconstrained lsqcurvefit
+    # First refine the guess with an unconstrained lsqcurvefit.
     x1 = lsqcurvefit(cpd_3p_model, x, y, x0,
                      np.zeros(6), np.concatenate([np.full(3, np.inf), np.ones(3)]),
                      max_nfev=100000)
     x0 = x0.copy()
     x0[~fix] = x1[~fix]
+    if not np.any(fix[:3]):
+        x0[:3] = np.sort(x0[:3])[::-1]
+    if n_free_fractions:
+        values = x0[3:][free[3:]]
+        x0[3:][free[3:]] = (remaining * values / values.sum()
+                              if values.sum() > 0 else remaining / n_free_fractions)
 
     a_tmp = fmincon_3p(
         lambda xx: np.sum((cpd_3p_model(interlace(x0, xx, fix), x) - y) ** 2),
@@ -198,8 +216,13 @@ def cpd_calculateCPD(SD, lags_to_calculate, Dguess, bin_size, fit_to_bin,
         x_bin = xout ** 2 if square_x else xout
         cpd_bin[:, 0, i - 1] = x_bin
 
+        if not square_x:
+            boundaries = np.concatenate(([-np.inf], (xout[:-1] + xout[1:]) / 2,
+                                         [np.inf]))
         for j in range(bin_size):
-            if j == 0:
+            if not square_x:
+                sel = (cpd_x >= boundaries[j]) & (cpd_x < boundaries[j + 1])
+            elif j == 0:
                 sel = cpd_x < x_bin[j]
             else:
                 sel = (cpd_x < x_bin[j]) & (cpd_x >= x_bin[j - 1])
@@ -293,14 +316,11 @@ def _vartest2(x, y):
         return 0
     if np.var(x, ddof=1) == 0 and np.var(y, ddof=1) == 0:
         return 0
-    res = stats.levene(x, y, center="mean")
-    # MATLAB vartest2 rejects when F exceeds the critical value; use the
-    # two-sided F-test p-value via scipy
-    f = np.var(x, ddof=1) / np.var(y, ddof=1)
-    if f < 1:
-        f = 1.0 / f
-    p = 2 * (1 - stats.f.cdf(f, len(x) - 1, len(y) - 1))
-    # fall back to the levene p-value when the F ratio is degenerate
-    if not np.isfinite(p):
-        p = res.pvalue
+    vx = np.var(x, ddof=1)
+    vy = np.var(y, ddof=1)
+    if vy == 0:
+        return 1
+    f = vx / vy
+    p = 2 * min(stats.f.cdf(f, len(x) - 1, len(y) - 1),
+                stats.f.sf(f, len(x) - 1, len(y) - 1))
     return 1 if p < 0.05 else 0

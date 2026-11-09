@@ -35,7 +35,7 @@ def test_roundsd_scalar():
 
 
 def test_simulation_1p1D():
-    rng = np.random.default_rng(42)
+    np.random.seed(42)
     # tutorial 7.1.2: 1 particle, D = 3 um^2/s, 500 frames, 10 ms
     coords, stats = sim_simulateCoordinates(
         1, 500, 0.01, [3.0, 0.0], 1.0, 0, 0, 0.0, 10.0, False, "1particle1D")
@@ -52,7 +52,7 @@ def test_simulation_1p1D():
 
 
 def test_msd_weighted_fit():
-    rng = np.random.default_rng(7)
+    np.random.seed(7)
     coords, stats = sim_simulateCoordinates(
         1, 500, 0.01, [3.0, 0.0], 1.0, 0, 0, 0.0, 10.0, False, "1particle1D")
     SD, MSDall = calculateSD(coords, 20, 1)
@@ -69,7 +69,7 @@ def test_msd_weighted_fit():
 
 def test_cpd_2p_recovery():
     """Tutorial 7.4.1: 100 particles, D1=2 / D2=0.2, 50/50, 100 frames."""
-    rng = np.random.default_rng(123)
+    np.random.seed(123)
     coords1, _ = sim_simulateCoordinates(
         50, 100, 0.01, [2.0, 0.0], 1.0, 0, 0, 0.0, 20.0, True, "1particle1D")
     coords2, _ = sim_simulateCoordinates(
@@ -102,6 +102,9 @@ def test_cpd_2p_recovery():
         D2 = a2[1, -1] / (4 * tau * lags)
         F1 = a2[2, -1]
         print(f"[CPD 2p square_x={square_x}] D1={D1:.3f} D2={D2:.3f} F1={F1:.3f}")
+        assert abs(D1 - 2.0) < 0.6
+        assert abs(D2 - 0.2) < 0.1
+        assert abs(F1 - 0.5) < 0.15
 
     # the faithful (original) behaviour
     cpd_bin, results = cpd_calculateCPD(
@@ -116,7 +119,7 @@ def test_cpd_2p_recovery():
 def test_fit_module():
     """Run the full CPD + FIT pipeline (tutorial 7.4.1) with the corrected
     binning and check that D and fractions are recovered."""
-    rng = np.random.default_rng(123)
+    np.random.seed(123)
     coords1, _ = sim_simulateCoordinates(
         50, 100, 0.01, [2.0, 0.0], 1.0, 0, 0, 0.0, 20.0, True, "1particle1D")
     coords2, _ = sim_simulateCoordinates(

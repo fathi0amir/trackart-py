@@ -18,6 +18,16 @@ class State:
         self.CPD = CPDState()
         self.FIT = FITState()
 
+    def invalidate_analysis(self):
+        self.MSD.results = None
+        self.MSD.param = None
+        self.CPD.cpd_bin = None
+        self.CPD.results = None
+        self.CPD.param = None
+        self.FIT.results = None
+        self.FIT.param = None
+        self.FIT.data = None
+
 
 class SIMState:
     def __init__(self):

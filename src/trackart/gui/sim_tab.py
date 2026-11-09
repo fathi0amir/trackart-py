@@ -241,6 +241,10 @@ class SIMTab(tk.Frame):
             self.state.SIM.param = param
             self.state.SIM.domains = domains
             self.state.SIM.coordinates = None
+            self.state.SIM.SD = None
+            self.state.SIM.MSDall = None
+            self.state.SIM.MSD = None
+            self.app.invalidate_analysis()
             self.state.SIM.plot.showDomains = 1
             self.state.SIM.plot.showTrajectories = 0
             self.var_plot_domains.set(True)
@@ -271,6 +275,10 @@ class SIMTab(tk.Frame):
             self.state.SIM.param = param
             self.state.SIM.domains = domains
             self.state.SIM.coordinates = None
+            self.state.SIM.SD = None
+            self.state.SIM.MSDall = None
+            self.state.SIM.MSD = None
+            self.app.invalidate_analysis()
             self.state.SIM.plot.showTrajectories = 0
             self.state.SIM.plot.showDomains = 1
             self.var_plot_domains.set(True)
@@ -297,19 +305,21 @@ class SIMTab(tk.Frame):
             random_start = self.var_random_start.get()
             domains = self.state.SIM.domains
             method = self._method
+            legacy = self.app.legacy_numerics.get()
 
             tau = tau_ms / 1000 / microsteps
             N = N * microsteps
-            k21 = k21 * microsteps
-            k12 = k12 * microsteps
+            if legacy:
+                k21 = k21 * microsteps
+                k12 = k12 * microsteps
 
             param = {
                 "N": N, "tau": tau * microsteps, "microsteps": microsteps,
                 "k21": k21, "k12": k12, "sig0": sig0, "method": method,
                 "simRange": sim_range, "particleCount": particle_count,
                 "domainsResolution": self.state.SIM.param.get("domainsResolution", 512),
+                "legacy_models": legacy,
             }
-            self.state.SIM.param = param
 
             something = (D[0] * F[0] + D[1] * F[1] != 0) or (method == "Domains" and domains is not None)
             if not something:
@@ -321,10 +331,16 @@ class SIMTab(tk.Frame):
             coords, stats = sim_simulateCoordinates(
                 particle_count, N, tau, D, F[0], k21, k12, sig0, sim_range,
                 random_start, method, domains)
-            self.state.SIM.stats = stats
-            self.state.SIM.microCoordinates = coords
+            micro_coords = coords
             if microsteps > 1:
                 coords = sim_reduceCoordinates(coords, microsteps)
+            self.app.invalidate_analysis()
+            self.state.SIM.SD = None
+            self.state.SIM.MSDall = None
+            self.state.SIM.MSD = None
+            self.state.SIM.param = param
+            self.state.SIM.stats = stats
+            self.state.SIM.microCoordinates = micro_coords
             self.state.SIM.coordinates = coords
             self.state.SIM.plot.showTrajectories = 1
             self.state.SIM.plot.showFigure = 0

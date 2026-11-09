@@ -9,8 +9,10 @@ from trackart.core.import_data import (import_calculateDall,
                                        import_trackImport, import_tracksExcl)
 from trackart.core.coordinates import calculateMSD, calculateSD
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "TestData",
-                        "SLB-on-mica_DOPC-SpM-ATTO677N", "25C")
+DATA_DIR = os.environ.get(
+    "TRACKART_TEST_DATA",
+    os.path.join(os.path.dirname(__file__), "..", "..", "TestData",
+                 "SLB-on-mica_DOPC-SpM-ATTO677N", "25C"))
 
 
 def test_xls_import():

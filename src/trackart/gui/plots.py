@@ -101,7 +101,7 @@ def _plot_pair_correlation(domains, sim_range, ax):
     gr = 1.0 / (autocorr / (domains.mean() ** 2 * domains.shape[0] * domains.shape[1]))
 
     a = np.zeros((4, dim_a))
-    a[0, :] = gr[0, 0:dim_a]
+    a[0, :] = gr[0:dim_a, 0]
     a[1, :] = gr[0, 0:dim_a]
     a[2, :] = gr[dim_b - 1, dim_b - dim_a:dim_b][::-1]
     a[3, :] = gr[dim_b - dim_a:dim_b, dim_b - 1][::-1]
