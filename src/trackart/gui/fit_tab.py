@@ -9,6 +9,7 @@ from tkinter import ttk
 import numpy as np
 
 from ..core.cpd import cpd_calculateCPD
+from ..core.coordinates import calculateMSD
 from ..core.fit import fit_fitMSD
 from ..core.util import nanmean, nanstd, outliers, parse_lags
 from . import plots, widgets as W
@@ -136,16 +137,28 @@ class FITTab(tk.Frame):
 
     def _read_param(self):
         param = {}
+        use_all = self.var_use_all.get()
         for key in ("p1", "p2", "p3"):
+            if use_all and key != "p1":
+                continue
             e_lags, e_model, e_intercept, v_force = self.p_rows[key]
-            lags = parse_lags(e_lags.get()) or [1]
+            lags = parse_lags(e_lags.get())
+            if not lags or any(lag < 1 for lag in lags):
+                raise ValueError(f"Invalid lags for {key}")
+            if len(lags) == 1:
+                lags = list(range(1, lags[0] + 1))
             param[f"{key}lags"] = np.asarray(lags, dtype=int)
             param[f"{key}model"] = int(float(e_model.get() or 1))
             param[f"{key}intercept"] = [float(e_intercept.get() or 0),
                                         int(v_force.get())]
-        param["fractionLags"] = np.asarray(parse_lags(self.e_fraction_lags.get()) or [1],
-                                           dtype=int)
-        use_all = self.var_use_all.get()
+        if not use_all:
+            fraction_lags = parse_lags(self.e_fraction_lags.get())
+            if not fraction_lags or any(lag < 1 for lag in fraction_lags):
+                raise ValueError("Invalid fraction lags")
+            if len(fraction_lags) == 1:
+                fraction_lags = list(range(1, fraction_lags[0] + 1))
+            param["fractionLags"] = np.asarray(fraction_lags, dtype=int)
+        param["legacy_models"] = self.app.legacy_numerics.get()
         if use_all:
             param["p2lags"] = param["p1lags"]
             param["p3lags"] = param["p1lags"]
@@ -163,7 +176,11 @@ class FITTab(tk.Frame):
         if state.CPD.results is None:
             self.app.message("Run the CPD calculation first.")
             return
-        param = self._read_param()
+        try:
+            param = self._read_param()
+        except ValueError as exc:
+            self.app.message(str(exc), "error")
+            return
         model = param["model"]
         if model == 1:
             data = state.CPD.results["model_1p"]
@@ -287,8 +304,10 @@ class FITTab(tk.Frame):
             self.app.message("Run Fit first.")
             return
         try:
-            repeats = max(1, self.e_repeats.get_int())
-            percentage = max(0.01, min(1.0, self.e_perm_pct.get_num() / 100))
+            repeats = self.e_repeats.get_int()
+            percentage = self.e_perm_pct.get_num() / 100
+            if repeats < 3 or not 0 < percentage <= 1:
+                raise ValueError("Permutation requires at least 3 repeats and a percentage in (0, 100].")
             model = state.FIT.param["model"]
             cpd_param = state.CPD.param
 
@@ -308,10 +327,12 @@ class FITTab(tk.Frame):
                 chosen = rng.permutation(len(tracks))[:size]
                 tracks_tmp = np.sort(tracks[chosen])
                 SD_tmp = SD[np.isin(SD[:, 0], tracks_tmp)]
+                N_tmp = calculateMSD(SD_tmp, cpd_param["tau"])[:cpd_param["lagsToCalculate"], 3]
                 _, results_tmp = cpd_calculateCPD(
                     SD_tmp, cpd_param["lagsToCalculate"], cpd_param["Dguess"],
                     cpd_param["bin"], cpd_param["fitToBin"], cpd_param["minP"],
-                    cpd_param["minR"], cpd_param["tau"], cpd_param["N"])
+                    cpd_param["minR"], cpd_param["tau"], N_tmp,
+                    square_x=cpd_param["square_x"])
                 if model == 1:
                     data = results_tmp["model_1p"]
                 elif model == 2:
@@ -331,17 +352,18 @@ class FITTab(tk.Frame):
                     perm_results[i, 4] = fr["fraction"][1, 0]
                     perm_results[i, 5] = fr["fraction"][2, 0]
 
-            perm_results = perm_results[:, : (3 if model == 1 else (4 if model == 2 else 6))]
+            perm_results = perm_results[:, : (1 if model == 1 else (4 if model == 2 else 6))]
             clean, _ = outliers(perm_results)
             perm_std = np.array([nanstd(clean[:, k]) for k in range(clean.shape[1])])
             perm_mean = np.array([nanmean(clean[:, k]) for k in range(clean.shape[1])])
-            rel_err = perm_std / perm_mean
+            if np.any(perm_mean[:model] == 0):
+                raise ValueError("Cannot estimate relative error for a zero mean diffusion coefficient.")
+            rel_err = perm_std[:model] / perm_mean[:model]
             rel_err_full = np.sqrt(rel_err ** 2 * percentage)
 
             table = list(state.FIT.results["resultsTable"])
-            perm_errs = rel_err_full * np.array([state.FIT.results["p1"]["D"],
-                                                 state.FIT.results["p2"]["D"] if model > 1 else 0,
-                                                 state.FIT.results["p3"]["D"] if model > 2 else 0])
+            perm_errs = rel_err_full * np.array(
+                [state.FIT.results[f"p{k}"]["D"] for k in range(1, model + 1)])
             new_table = []
             for row in table:
                 if row[0] == "D permut:":

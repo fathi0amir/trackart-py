@@ -168,5 +168,6 @@ def ecdf(data):
     n = data.size
     if n == 0:
         return np.array([]), np.array([])
-    y = (np.arange(1, n + 1)) / n
-    return data, y
+    values, counts = np.unique(data, return_counts=True)
+    return np.concatenate((values[:1], values)), np.concatenate(
+        ([0.0], np.cumsum(counts) / n))

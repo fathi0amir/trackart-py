@@ -12,7 +12,7 @@ from trackart.core.simulate import sim_simulateCoordinates
 
 
 def test_3p():
-    rng = np.random.default_rng(5)
+    np.random.seed(5)
     Ds = [2.0, 0.2, 0.02]
     coords_parts = []
     for k, D in enumerate(Ds):

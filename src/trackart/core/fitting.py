@@ -60,7 +60,9 @@ def lsqcurvefit(model, xdata, ydata, p0, lb=None, ub=None, weights=None,
         return ((model(p, xdata, *extra_args) - ydata) * weights).ravel()
 
     res = least_squares(fun, p0, bounds=(lb, ub), method="trf",
-                        max_nfev=max_nfev, xtol=1e-12, ftol=1e-12, gtol=1e-12)
+                        max_nfev=max_nfev, xtol=1e-9, ftol=1e-9, gtol=1e-9)
+    if not res.success:
+        raise RuntimeError(f"Least-squares fit failed: {res.message}")
     return res.x
 
 
@@ -122,16 +124,21 @@ def fmincon_3p(objective, x0, lb, ub, A, b, Aeq, beq, mycon=None,
             c, ceq = mycon(x)
             return -np.asarray(c, dtype=float).ravel()  # c <= 0 -> -c >= 0
 
-        def _eq(x):
-            c, ceq = mycon(x)
-            return np.asarray(ceq, dtype=float).ravel()
-
         cons.append({"type": "ineq", "fun": _ineq})
-        cons.append({"type": "eq", "fun": _eq})
+        if np.asarray(mycon(x0)[1]).size:
+            cons.append({"type": "eq", "fun": lambda x: np.asarray(
+                mycon(x)[1], dtype=float).ravel()})
 
     res = minimize(_fun, x0, method="SLSQP", bounds=list(zip(lb, ub)),
                    constraints=cons, options={"maxiter": max_iter,
                                               "ftol": 1e-12})
+    if not res.success:
+        raise RuntimeError(f"Constrained fit failed: {res.message}")
+    for constraint in cons:
+        value = np.asarray(constraint["fun"](res.x))
+        if (constraint["type"] == "eq" and np.any(np.abs(value) > 1e-7)
+                or constraint["type"] == "ineq" and np.any(value < -1e-7)):
+            raise RuntimeError("Constrained fit returned infeasible parameters")
     return res.x
 
 

@@ -12,6 +12,7 @@ from ..core.coordinates import calculateMSD, calculateSD
 from ..core.import_data import (import_calculateDall, import_trackImport,
                                 import_tracksExcl)
 from . import plots, widgets as W
+from .state import ImportState
 
 PLOT_TYPES = [
     ("Tracks lengths distribution", "trackLengthDistribution"),
@@ -196,6 +197,8 @@ class ImportTab(tk.Frame):
         except Exception as exc:
             self.app.message(str(exc), "error")
             return
+        self.app.invalidate_analysis()
+        self.state.import_data = ImportState()
         imp = self.state.import_data
         imp.coordinates = coords
         imp.files = list(files)
@@ -252,6 +255,7 @@ class ImportTab(tk.Frame):
         Dall = import_calculateDall(MSDall, tracks, param["lagsToCalculate"],
                                     param["tau"])
 
+        self.app.invalidate_analysis()
         imp.data = data
         imp.dataFiltered = data
         imp.Dall = Dall
@@ -307,6 +311,7 @@ class ImportTab(tk.Frame):
         if size < 1:
             self.app.message("Random percentage too small.")
             return
+        self.app.invalidate_analysis()
         random_tracks = np.random.permutation(len(tracks_excl))[:size]
         tracks_excl = np.sort(tracks_excl[random_tracks])
 
@@ -333,6 +338,7 @@ class ImportTab(tk.Frame):
         imp = self.state.import_data
         if imp.SD is None:
             return
+        self.app.invalidate_analysis()
         tau = imp.param["tau"]
         imp.dataFiltered = imp.data
         imp.DallFiltered = imp.Dall

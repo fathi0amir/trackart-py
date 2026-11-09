@@ -28,14 +28,16 @@ def fit_fitMSD(data, parameters):
     ``fraction`` (n_pop, 2): mean and std of each fraction.
     """
     results = {"p1": _fit_model(data["MSD1"], parameters["p1lags"],
-                                parameters["p1model"], parameters["p1intercept"])}
+                                parameters["p1model"], parameters["p1intercept"],
+                                parameters.get("legacy_models", True))}
 
     if parameters["model"] == 2:
         results["p2"] = _fit_model(data["MSD2"], parameters["p2lags"],
-                                   parameters["p2model"], parameters["p2intercept"])
+                                   parameters["p2model"], parameters["p2intercept"],
+                                   parameters.get("legacy_models", True))
         frac_lags = np.asarray(parameters["fractionLags"], dtype=int) - 1
         f1 = np.mean(data["a"][2, frac_lags])
-        f1_std = np.std(data["a"][2, frac_lags])
+        f1_std = np.std(data["a"][2, frac_lags], ddof=1 if len(frac_lags) > 1 else 0)
         results["fraction"] = np.array([
             [f1, f1_std],
             [1 - f1, f1_std],
@@ -43,12 +45,16 @@ def fit_fitMSD(data, parameters):
 
     elif parameters["model"] == 3:
         results["p2"] = _fit_model(data["MSD2"], parameters["p2lags"],
-                                   parameters["p2model"], parameters["p2intercept"])
+                                   parameters["p2model"], parameters["p2intercept"],
+                                   parameters.get("legacy_models", True))
         results["p3"] = _fit_model(data["MSD3"], parameters["p3lags"],
-                                   parameters["p3model"], parameters["p3intercept"])
+                                   parameters["p3model"], parameters["p3intercept"],
+                                   parameters.get("legacy_models", True))
         frac_lags = np.asarray(parameters["fractionLags"], dtype=int) - 1
         means = np.array([np.mean(data["a"][3 + k, frac_lags]) for k in range(3)])
-        stds = np.array([np.std(data["a"][3 + k, frac_lags]) for k in range(3)])
+        stds = np.array([np.std(data["a"][3 + k, frac_lags],
+                                ddof=1 if len(frac_lags) > 1 else 0)
+                         for k in range(3)])
         results["fraction"] = np.column_stack([means, stds])
 
     else:  # 1 population
@@ -57,7 +63,7 @@ def fit_fitMSD(data, parameters):
     return results
 
 
-def _fit_model(MSD, lags_to_fit, model, intercept):
+def _fit_model(MSD, lags_to_fit, model, intercept, legacy_models=True):
     """Fit a single MSD curve with the selected model.
 
     model: 1 = normal (linear), 2 = confined, 3 = anomalous
@@ -69,7 +75,7 @@ def _fit_model(MSD, lags_to_fit, model, intercept):
     if model == 1:
         return msd_MSDlinearFit(MSD, lags_to_fit, intercept)
     elif model == 2:
-        return msd_confinedDiffusion(MSD, lags_to_fit, intercept)
+        return msd_confinedDiffusion(MSD, lags_to_fit, intercept, legacy=legacy_models)
     elif model == 3:
         return msd_anomalousDiffusion(MSD, lags_to_fit, intercept)
     raise ValueError(f"Unknown fit model: {model}")

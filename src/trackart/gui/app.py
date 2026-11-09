@@ -26,6 +26,7 @@ class TrackArtApp(tk.Tk):
         self.tabs = {}
         self._current_tab = None
         self._tab_var = tk.StringVar(value="SIM")
+        self.legacy_numerics = tk.BooleanVar(value=True)
 
         self._build_tab_bar()
         self._show_module("SIM")
@@ -43,6 +44,36 @@ class TrackArtApp(tk.Tk):
                 padx=14, pady=2,
             )
             rb.pack(side="left", padx=2)
+        tk.Checkbutton(bar, text="Legacy numerical behavior",
+                       variable=self.legacy_numerics, bg=W.BG,
+                       command=self.invalidate_analysis).pack(side="right", padx=8)
+
+    def invalidate_analysis(self):
+        self.state.invalidate_analysis()
+        for name in ("MSD", "FIT"):
+            tab = self.tabs.get(name)
+            if tab is not None:
+                tab._fill_results([])
+                for ax in tab.plot_panel.axes:
+                    ax.clear()
+                tab.plot_panel.draw()
+        tab = self.tabs.get("CPD")
+        if tab is not None:
+            for panel in (tab.plot_panel, tab.preview_panel):
+                for ax in panel.axes:
+                    ax.clear()
+                panel.draw()
+
+    def invalidate_fit(self):
+        self.state.FIT.results = None
+        self.state.FIT.param = None
+        self.state.FIT.data = None
+        tab = self.tabs.get("FIT")
+        if tab is not None:
+            tab._fill_results([])
+            for ax in tab.plot_panel.axes:
+                ax.clear()
+            tab.plot_panel.draw()
 
     def _show_module(self, name):
         self._tab_var.set(name)
@@ -67,6 +98,8 @@ class TrackArtApp(tk.Tk):
     # ------------------------------------------------------------------
     def sim_tau_ms(self):
         """Step [ms] from the SIM tab (default 10 when not yet opened)."""
+        if self.state.SIM.coordinates is not None:
+            return self.state.SIM.param["tau"] * 1000
         tab = self.tabs.get("SIM")
         if tab is not None:
             try:
@@ -77,6 +110,8 @@ class TrackArtApp(tk.Tk):
 
     def import_tau_ms(self):
         """Exposure [ms] from the Import tab (default 10 when not yet opened)."""
+        if self.state.import_data.dataFiltered is not None:
+            return self.state.import_data.param["tau"] * 1000
         tab = self.tabs.get("Import")
         if tab is not None:
             try:

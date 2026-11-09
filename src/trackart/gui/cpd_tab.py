@@ -166,6 +166,7 @@ class CPDTab(tk.Frame):
         param["fitToBin"] = bool(self.var_fit_to_bin.get())
         param["minP"] = self.e_minP.get_num()
         param["minR"] = self.e_minR.get_num()
+        param["square_x"] = self.app.legacy_numerics.get()
         tau = param["tau"]
         param["Dguess"] = self._build_dguess(tau)
         param["intercept"] = [self.guess_widgets[i][4].get_num() for i in range(3)]
@@ -179,21 +180,19 @@ class CPDTab(tk.Frame):
                         state.SIM.MSDall.shape[1] - 1 < lags)
                 if need:
                     SD, MSDall = calculateSD(state.SIM.coordinates, lags, 1)
-                    MSD = calculateMSD(SD, 1)
                     state.SIM.SD = SD
                     state.SIM.MSDall = MSDall
-                    state.SIM.MSD = MSD
                 SD = state.SIM.SD
+                state.SIM.MSD = calculateMSD(SD, tau)
             else:
                 need = (state.import_data.SDfiltered is None or
                         state.import_data.SDfiltered.shape[1] - 1 < lags)
                 if need:
                     SD, MSDall = calculateSD(state.import_data.dataFiltered, lags, 1)
-                    MSD = calculateMSD(SD, 1)
                     state.import_data.SDfiltered = SD
                     state.import_data.MSDallFiltered = MSDall
-                    state.import_data.MSD = MSD
                 SD = state.import_data.SDfiltered
+                state.import_data.MSD = calculateMSD(SD, tau)
 
             N = state.SIM.MSD if param["dataSource"] == "simulated" else state.import_data.MSD
             N = N[0:lags, 3]
@@ -201,7 +200,9 @@ class CPDTab(tk.Frame):
 
             cpd_bin, results = cpd_calculateCPD(
                 SD, lags, param["Dguess"], param["bin"], param["fitToBin"],
-                param["minP"], param["minR"], tau, N)
+                param["minP"], param["minR"], tau, N,
+                square_x=param["square_x"])
+            self.app.invalidate_fit()
             state.CPD.cpd_bin = cpd_bin
             state.CPD.results = results
             state.CPD.param = param

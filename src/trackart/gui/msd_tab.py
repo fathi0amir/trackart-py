@@ -184,6 +184,7 @@ class MSDTab(tk.Frame):
             "intercept": [self.e_intercept.get_num(),
                           int(self.var_force_intercept.get())],
             "model": MODEL_KEY[self.var_model.get()],
+            "legacy_models": self.app.legacy_numerics.get(),
         }
         state.MSD.plot.showFigure = 0
 
@@ -221,24 +222,26 @@ class MSDTab(tk.Frame):
             if need:
                 SD, MSDall = calculateSD(state.SIM.coordinates,
                                          param["lagsToCalculate"], 1)
-                MSD = calculateMSD(SD, param["tau"], 1)
                 state.SIM.SD = SD
                 state.SIM.MSDall = MSDall
-                state.SIM.MSD = MSD
-            MSD = state.SIM.MSD
+            MSD = calculateMSD(state.SIM.SD, param["tau"], 1)
+            state.SIM.MSD = MSD
         else:
             need = (state.import_data.MSDallFiltered is None or
                     state.import_data.MSDallFiltered.shape[1] - 1 < param["lagsToCalculate"])
             if need:
                 SD, MSDall = calculateSD(state.import_data.dataFiltered,
                                          param["lagsToCalculate"], 1)
-                MSD = calculateMSD(SD, param["tau"], 1)
                 state.import_data.SDfiltered = SD
                 state.import_data.MSDallFiltered = MSDall
-                state.import_data.MSD = MSD
-            MSD = state.import_data.MSD
+            MSD = calculateMSD(state.import_data.SDfiltered, param["tau"], 1)
+            state.import_data.MSD = MSD
 
-        results, table = msd_calculateDcoeff(MSD, param)
+        try:
+            results, table = msd_calculateDcoeff(MSD, param)
+        except (ValueError, RuntimeError, IndexError, FloatingPointError) as exc:
+            self.app.message(f"MSD fit failed:\n{exc}", "error")
+            return
         state.MSD.results = results
         state.MSD.param = param
         self._fill_results(table)
